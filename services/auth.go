@@ -10,6 +10,7 @@ import (
 	"todo-app/utils"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func RegisterUser(req models.RegisterRequest) (*models.User, error) {
@@ -27,10 +28,12 @@ func RegisterUser(req models.RegisterRequest) (*models.User, error) {
 		CreatedAt: time.Now(),
 	}
 
-	_, err = collection.InsertOne(context.Background(), user)
+	result, err := collection.InsertOne(context.Background(), user)
 	if err != nil {
 		return nil, err
 	}
+
+	user.ID = result.InsertedID.(primitive.ObjectID)
 
 	return &user, nil
 }
