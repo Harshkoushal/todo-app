@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"todo-app/database"
@@ -42,4 +43,49 @@ func GetTodos(userID primitive.ObjectID) ([]models.Todo, error) {
 	todos := []models.Todo{}
 	err = cursor.All(context.Background(), &todos)
 	return todos, err
+}
+func GetTodoByID(userID, todoID primitive.ObjectID) (*models.Todo, error) {
+	collection := database.GetCollection("todos")
+
+	var todo models.Todo
+	err := collection.FindOne(context.Background(), bson.M{"_id": todoID, "userId": userID}).Decode(&todo)
+	if err != nil {
+		return nil, errors.New("todo not found")
+	}
+
+	return &todo, nil
+}
+
+func UpdateTodo(userID, todoID primitive.ObjectID, req models.CreateTodoRequest) (*models.Todo, error) {
+	collection := database.GetCollection("todos")
+
+	update := bson.M{
+		"title":       req.Title,
+		"description": req.Description,
+	}
+
+	_, err := collection.UpdateOne(
+		context.Background(),
+		bson.M{"_id": todoID, "userId": userID},
+		bson.M{"$set": update},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return GetTodoByID(userID, todoID)
+}
+
+func DeleteTodo(userID, todoID primitive.ObjectID) error {
+	collection := database.GetCollection("todos")
+
+	result, err := collection.DeleteOne(context.Background(), bson.M{"_id": todoID, "userId": userID})
+	if err != nil {
+		return err
+	}
+	if result.DeletedCount == 0 {
+		return errors.New("todo not found")
+	}
+
+	return nil
 }

@@ -21,6 +21,9 @@ func main() {
 
 	mux.Handle("POST /api/todos", middleware.Authenticate(http.HandlerFunc(handlers.CreateTodo)))
 	mux.Handle("GET /api/todos", middleware.Authenticate(http.HandlerFunc(handlers.GetTodos)))
+	mux.Handle("GET /api/todos/{id}", middleware.Authenticate(http.HandlerFunc(handlers.GetTodo)))
+	mux.Handle("PUT /api/todos/{id}", middleware.Authenticate(http.HandlerFunc(handlers.UpdateTodo)))
+	mux.Handle("DELETE /api/todos/{id}", middleware.Authenticate(http.HandlerFunc(handlers.DeleteTodo)))
 
 	log.Println("server running on port 8080")
 	http.ListenAndServe(":8080", mux)
