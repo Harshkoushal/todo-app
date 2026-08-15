@@ -62,6 +62,7 @@ func UpdateTodo(userID, todoID primitive.ObjectID, req models.CreateTodoRequest)
 	update := bson.M{
 		"title":       req.Title,
 		"description": req.Description,
+		"completed":   req.Completed,
 	}
 
 	_, err := collection.UpdateOne(
