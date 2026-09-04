@@ -25,6 +25,8 @@ func main() {
 	mux.Handle("PUT /api/todos/{id}", middleware.Authenticate(http.HandlerFunc(handlers.UpdateTodo)))
 	mux.Handle("DELETE /api/todos/{id}", middleware.Authenticate(http.HandlerFunc(handlers.DeleteTodo)))
 
+	handler := middleware.EnableCORS(mux)
+
 	log.Println("server running on port 8080")
-	http.ListenAndServe(":8080", mux)
+	http.ListenAndServe(":8080", handler)
 }

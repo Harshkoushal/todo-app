@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>My Tasks — Todo App</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="topbar">
+  <h2>My Tasks</h2>
+  <div class="user-info">
+    <span id="userEmailDisplay"></span>
+    <button class="logout-btn" id="logoutBtn">Log out</button>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="add-task-box">
+    <div class="error-msg" id="errorMsg"></div>
+    <div class="row">
+      <input type="text" id="newTitle" placeholder="Task title..." />
+      <button id="addBtn">Add Task</button>
+    </div>
+    <textarea id="newDesc" placeholder="Description (optional)"></textarea>
+  </div>
+
+  <div class="task-list" id="taskList">
+    <div class="empty-state">Loading tasks...</div>
+  </div>
+
+</div>
+
+<!-- Edit modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <h3>Edit Task</h3>
+    <div class="field">
+      <label>Title</label>
+      <input type="text" id="editTitle" />
+    </div>
+    <div class="field">
+      <label>Description</label>
+      <textarea id="editDesc" style="width:100%; padding:10px 12px; border:1px solid #d1d5db; border-radius:8px; min-height:60px;"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="cancel-btn" id="cancelEditBtn">Cancel</button>
+      <button class="save-btn" id="saveEditBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="api.js"></script>
+<script>
+  requireAuth();
+
+  const taskList = document.getElementById("taskList");
+  const errorMsg = document.getElementById("errorMsg");
+  let editingTodoId = null;
+
+  document.getElementById("userEmailDisplay").textContent = localStorage.getItem("userEmail") || "";
+
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    clearToken();
+    window.location.href = "login.html";
+  });
+
+  function showError(message) {
+    errorMsg.textContent = message;
+    errorMsg.classList.add("show");
+    setTimeout(() => errorMsg.classList.remove("show"), 4000);
+  }
+
+  function renderTasks(todos) {
+    if (!todos || todos.length === 0) {
+      taskList.innerHTML = '<div class="empty-state">No tasks yet. Add one above.</div>';
+      return;
+    }
+
+    taskList.innerHTML = "";
+    todos.forEach((todo) => {
+      const item = document.createElement("div");
+      item.className = "task-item" + (todo.completed ? " completed" : "");
+      item.innerHTML = `
+        <input type="checkbox" ${todo.completed ? "checked" : ""} data-id="${todo.id}" class="toggle-check" />
+        <div class="task-content">
+          <div class="task-title">${escapeHtml(todo.title)}</div>
+          <div class="task-desc">${escapeHtml(todo.description || "")}</div>
+        </div>
+        <div class="task-actions">
+          <button class="edit-btn" data-id="${todo.id}" data-title="${escapeHtml(todo.title)}" data-desc="${escapeHtml(todo.description || "")}">Edit</button>
+          <button class="delete-btn" data-id="${todo.id}">Delete</button>
+        </div>
+      `;
+      taskList.appendChild(item);
+    });
+
+    document.querySelectorAll(".toggle-check").forEach((cb) => {
+      cb.addEventListener("change", (e) => toggleComplete(e.target.dataset.id, e.target.checked));
+    });
+    document.querySelectorAll(".edit-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => openEditModal(
+        e.target.dataset.id,
+        e.target.dataset.title,
+        e.target.dataset.desc
+      ));
+    });
+    document.querySelectorAll(".delete-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => deleteTask(e.target.dataset.id));
+    });
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  async function loadTasks() {
+    try {
+      const todos = await apiRequest("/todos", "GET");
+      renderTasks(todos);
+    } catch (err) {
+      showError(err.message);
+      taskList.innerHTML = '<div class="empty-state">Could not load tasks.</div>';
+    }
+  }
+
+  document.getElementById("addBtn").addEventListener("click", async () => {
+    const title = document.getElementById("newTitle").value.trim();
+    const description = document.getElementById("newDesc").value.trim();
+
+    if (!title) {
+      showError("Title is required");
+      return;
+    }
+
+    try {
+      await apiRequest("/todos", "POST", { title, description, completed: false });
+      document.getElementById("newTitle").value = "";
+      document.getElementById("newDesc").value = "";
+      loadTasks();
+    } catch (err) {
+      showError(err.message);
+    }
+  });
+
+  async function toggleComplete(id, completed) {
+    try {
+      // fetch current values first, since PUT expects title/description too
+      const current = await apiRequest("/todos/" + id, "GET");
+      await apiRequest("/todos/" + id, "PUT", {
+        title: current.title,
+        description: current.description,
+        completed: completed,
+      });
+      loadTasks();
+    } catch (err) {
+      showError(err.message);
+      loadTasks();
+    }
+  }
+
+  async function deleteTask(id) {
+    if (!confirm("Delete this task?")) return;
+    try {
+      await apiRequest("/todos/" + id, "DELETE");
+      loadTasks();
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  function openEditModal(id, title, desc) {
+    editingTodoId = id;
+    document.getElementById("editTitle").value = title;
+    document.getElementById("editDesc").value = desc;
+    document.getElementById("editModal").classList.add("show");
+  }
+
+  document.getElementById("cancelEditBtn").addEventListener("click", () => {
+    document.getElementById("editModal").classList.remove("show");
+    editingTodoId = null;
+  });
+
+  document.getElementById("saveEditBtn").addEventListener("click", async () => {
+    const title = document.getElementById("editTitle").value.trim();
+    const description = document.getElementById("editDesc").value.trim();
+
+    if (!title) {
+      showError("Title is required");
+      return;
+    }
+
+    try {
+      const current = await apiRequest("/todos/" + editingTodoId, "GET");
+      await apiRequest("/todos/" + editingTodoId, "PUT", {
+        title,
+        description,
+        completed: current.completed,
+      });
+      document.getElementById("editModal").classList.remove("show");
+      editingTodoId = null;
+      loadTasks();
+    } catch (err) {
+      showError(err.message);
+    }
+  });
+
+  loadTasks();
+</script>
+
+</body>
+</html>
